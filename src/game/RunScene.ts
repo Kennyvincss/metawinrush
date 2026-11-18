@@ -687,7 +687,6 @@ export class RunScene extends Phaser.Scene {
         const sides = pr.sides === "both" ? [-1, 1] : pr.sides === "left" ? [-1] : [1];
         const sgn = sides[Math.floor(this.rand() * sides.length)];
         const img = this.getImg(`city:${this.cfg.city}:prop${i}`);
-        img.setFlipX(sgn < 0);
         this.scenery.push({ img, x: sgn * (ROAD_HALF + pr.offset + pr.tex.w / 2), z: this.propCursor[i], w: pr.tex.w, h: pr.tex.h, side: sgn });
         this.propCursor[i] += pr.spacing * (0.6 + this.rand() * 0.8);
       }
