@@ -1,9 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Exo_2, Orbitron } from "next/font/google";
 import "./globals.css";
-
-const display = Orbitron({ subsets: ["latin"], weight: ["500", "700", "900"], variable: "--font-display" });
-const body = Exo_2({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-body" });
 
 export const metadata: Metadata = {
   title: "METAWIN RUSH — Run. Collect. Compete. Win.",
@@ -25,7 +21,13 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${display.variable} ${body.variable}`}>
+    <html lang="en">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+        {/* eslint-disable-next-line @next/next/no-page-custom-font */}
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;500;600;700&family=Orbitron:wght@500;700;900&display=swap" />
+      </head>
       <body className="min-h-[100dvh] antialiased">{children}</body>
     </html>
   );

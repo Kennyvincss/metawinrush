@@ -4,6 +4,8 @@
 
 :root {
   color-scheme: dark;
+  --font-display: "Orbitron", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Exo 2", "Segoe UI", system-ui, sans-serif;
 }
 
 html,
