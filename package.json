@@ -1,0 +1,35 @@
+{
+  "name": "metawin-rush",
+  "version": "1.0.0",
+  "private": true,
+  "description": "METAWIN RUSH — a futuristic 2.5D endless runner. Run. Collect. Compete. Win.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "db:seed-sql": "tsx scripts/generate-seed.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.119.0",
+    "next": "15.5.29",
+    "phaser": "3.90.0",
+    "react": "19.1.10",
+    "react-dom": "19.1.10"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.1",
+    "@types/react": "19.1.17",
+    "@types/react-dom": "19.1.11",
+    "autoprefixer": "10.4.21",
+    "postcss": "^8.5.33",
+    "tailwindcss": "3.4.19",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3",
+    "vitest": "^5.1.0"
+  },
+  "overrides": {
+    "postcss": "$postcss"
+  }
+}
