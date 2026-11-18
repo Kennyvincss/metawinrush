@@ -1,0 +1,10 @@
+{
+  "name": "METAWIN RUSH",
+  "short_name": "MW RUSH",
+  "start_url": "/",
+  "display": "fullscreen",
+  "orientation": "portrait",
+  "background_color": "#05030b",
+  "theme_color": "#05030b",
+  "icons": [{ "src": "/brand/logo.jpg", "sizes": "400x400", "type": "image/jpeg" }]
+}
