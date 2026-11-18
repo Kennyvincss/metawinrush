@@ -1,4 +1,4 @@
-import Phaser from "phaser";
+import * as Phaser from "phaser";
 import { paintCharacterBack, type BackPose } from "@/lib/art/character";
 import { COIN_SCORE, POWERUP_DURATION, distanceMultiplier, type PowerUpKind, type RunResult } from "@/lib/rules";
 import { getItem } from "@/lib/data/cosmetics";
@@ -528,7 +528,7 @@ export class RunScene extends Phaser.Scene {
       for (const p of batch.powerups) this.spawnPowerUp(p.kind, laneX(p.lane), p.z);
     }
 
-    this.collide();
+    this.collide(this.dist - dd);
     this.trailFx(dt);
 
     // gentle road curvature after the first stretch
@@ -744,19 +744,23 @@ export class RunScene extends Phaser.Scene {
       }
       return true;
     });
+    let respawn = 0;
     this.particles = this.particles.filter((p) => {
       if (p.life <= 0) {
         this.freeImg(p.img);
-        if (p.screen) this.spawnAmbient(false);
+        if (p.screen) respawn++;
         return false;
       }
       return true;
     });
+    for (let i = 0; i < respawn; i++) this.spawnAmbient(false);
   }
 
   // ── Collisions ─────────────────────────────────────────────────────────
-  private collide() {
+  /** Swept collision over [prevZ, dist] so fast frames can't tunnel through thin obstacles or pickups. */
+  private collide(prevZ: number) {
     const pz = this.dist;
+    const zLo = Math.min(prevZ, pz);
     const sliding = this.slideT >= 0 && this.jumpT < 0;
     const height = sliding ? PLAYER_SLIDE_H : PLAYER_H;
     for (const o of this.obstacles) {
@@ -767,7 +771,7 @@ export class RunScene extends Phaser.Scene {
         o.passed = true;
         this.dodges++;
       }
-      if (z1 < pz - PLAYER_HALF_D || z0 > pz + PLAYER_HALF_D) continue;
+      if (z1 < zLo - PLAYER_HALF_D || z0 > pz + PLAYER_HALF_D) continue;
       const halfW = o.art.w / 2 - 0.12;
       if (Math.abs(this.px - o.x) > PLAYER_HALF_W + halfW) continue;
       // vertical test
@@ -812,7 +816,7 @@ export class RunScene extends Phaser.Scene {
         c.y += (centerY - c.y) * k * 1.6;
         c.z += (pz + 0.4 - c.z) * k * 1.2;
       }
-      if (Math.abs(c.z - pz) < 0.9 && Math.abs(c.x - this.px) < 0.95 && Math.abs(c.y - centerY) < 1.25) {
+      if (c.z > zLo - 0.9 && c.z < pz + 0.9 && Math.abs(c.x - this.px) < 0.95 && Math.abs(c.y - centerY) < 1.25) {
         c.dead = true;
         const n = this.active.coinboost ? 2 : 1;
         this.coinCount += n;
@@ -823,7 +827,7 @@ export class RunScene extends Phaser.Scene {
     }
     for (const p of this.pus) {
       if (p.dead) continue;
-      if (Math.abs(p.z - pz) < 1 && Math.abs(p.x - this.px) < 1.0 && this.py < 2.4) {
+      if (p.z > zLo - 1 && p.z < pz + 1 && Math.abs(p.x - this.px) < 1.0 && this.py < 2.4) {
         p.dead = true;
         this.activate(p.kind);
       }

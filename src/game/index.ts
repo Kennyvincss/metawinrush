@@ -1,5 +1,5 @@
 // Entry point that mounts the Phaser runner into a DOM element and wires swipe + keyboard input.
-import Phaser from "phaser";
+import * as Phaser from "phaser";
 import { audio } from "./audio/engine";
 import { RunScene } from "./RunScene";
 import type { GameAction, GameCallbacks, LaunchConfig } from "./types";

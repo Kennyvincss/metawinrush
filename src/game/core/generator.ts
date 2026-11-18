@@ -184,7 +184,7 @@ export class TrackGenerator {
     const gapStart = z0 + 3;
     const gapEnd = rowZ - 4;
     const coinLane = this.pick(safe.length ? safe : [1]);
-    const wantPower = rowZ - this.lastPowerUpZ > 320 && z0 > 180 && this.chance(0.22);
+    const wantPower = rowZ - this.lastPowerUpZ > 220 && z0 > 160 && this.chance(0.32);
     if (wantPower && gapEnd - gapStart > 10) {
       const kind = this.pick(this.powerupKinds);
       const z = (gapStart + gapEnd) / 2;
