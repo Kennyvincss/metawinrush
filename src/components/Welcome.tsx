@@ -14,7 +14,7 @@ export default function Welcome() {
       <div className="absolute inset-0 grid-bg" />
       <div className="absolute left-1/2 top-1/3 h-96 w-96 -translate-x-1/2 rounded-full bg-mw-violet/25 blur-3xl" />
       <div className="relative w-full max-w-sm text-center">
-        <img src="/brand/character.jpg" alt="The Masked One" className="mx-auto h-44 w-44 animate-floaty rounded-[2rem] object-cover shadow-cyan" />
+        <img src="/brand/character.jpg" alt="SKEL — the Metawin runner" className="mx-auto h-44 w-44 animate-floaty rounded-[2rem] object-cover shadow-cyan" />
         <div className="mt-6 flex items-center justify-center gap-3">
           <Logo size={44} />
           <h1 className="heading text-3xl">

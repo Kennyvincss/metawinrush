@@ -12,7 +12,7 @@ insert into public.cities (id, name, theme, unlock_type, unlock_value, sort) val
 on conflict (id) do update set name = excluded.name, theme = excluded.theme, unlock_type = excluded.unlock_type, unlock_value = excluded.unlock_value, sort = excluded.sort;
 
 insert into public.characters (id, slot, name, rarity, price, unlock_level, reward_only) values
-  ('char_masked', 'character', 'The Masked One', 'Legendary', 0, null, false),
+  ('char_masked', 'character', 'SKEL', 'Legendary', 0, null, false),
   ('char_cyan', 'character', 'Cyan Phantom', 'Rare', 1500, null, false),
   ('char_crimson', 'character', 'Crimson Rider', 'Rare', 2000, null, false),
   ('char_emerald', 'character', 'Emerald Ghost', 'Rare', 2500, null, false),

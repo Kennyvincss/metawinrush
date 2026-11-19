@@ -2,7 +2,7 @@
 \set ON_ERROR_STOP on
 insert into auth.users values ('00000000-0000-0000-0000-000000000001'), ('00000000-0000-0000-0000-000000000002');
 set role service_role;
-select public.bootstrap_player('00000000-0000-0000-0000-000000000001', 'NeonRunner', '{"character":"char_masked"}', '{}');
+select public.bootstrap_player('00000000-0000-0000-0000-000000000001', 'SKEL_0001', '{"character":"char_masked"}', '{}');
 select public.bootstrap_player('00000000-0000-0000-0000-000000000002', 'GhostRush', '{"character":"char_cyan"}', '{}');
 insert into game_sessions(id, user_id, city_id, seed) values ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', 'tokyo', 42);
 insert into tournaments(id, name, kind, starts_at, ends_at) values ('daily-test', 'Daily Dash', 'daily', now() - interval '1 hour', now() + interval '1 hour');

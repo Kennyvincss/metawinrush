@@ -70,7 +70,14 @@ Unit tests check these rules across all cities and many seeds.
 - A 7-day login streak.
 - A shareable 1200×675 score card for X.
 
-**Graphics.** Every sprite, building, vehicle and skyline is painted procedurally at load time from code, so there are no third-party or unlicensed assets. Only the selected city's textures are generated and kept in memory. The supplied Metawin logo and character artwork (`public/brand/`) are used for branding and the default avatar. The in-game runner and all character variants are drawn from that design: silver helmet, heart-shaped black visor, glowing MW symbol, violet coat, green vest and bowtie.
+**SKEL, the runner, is real-time 3D.** The game renders a rigged human figure with realistic proportions using Three.js:
+- PBR materials, environment reflections and the current city's neon rim lights;
+- real animations for sprinting, jumping, rolling (slide), stumbling and falling;
+- the Metawin outfit: chrome helmet, black visor with the glowing MW symbol, violet jacket, green vest, dark pants and boots, and a glowing MW on the back.
+
+Each frame is rendered with the game camera's exact projection and composited into the Phaser scene, so obstacles still pass in front of and behind the runner correctly. Shop and profile portraits use the same model. If WebGL or the model fails to load, the game falls back to 2D sprites. The base mesh and animations are Quaternius's *Universal Animation Library* (CC0); see `public/models/CREDITS.txt`.
+
+**World graphics.** The cities, vehicles, props and skylines are painted procedurally from code at load time, so there are no third-party or unlicensed assets. Only the selected city's textures are generated and kept in memory. The supplied Metawin logo and character artwork (`public/brand/`) are used for branding and the dashboard hero.
 
 ## Project structure
 
@@ -82,6 +89,7 @@ src/
   components/             React UI (dashboard, screens, game screen, HUD, game over…)
   game/                   Phaser game — independent of React
     RunScene.ts           projection, rendering, player physics, collisions, effects, tutorial
+    character3d.ts        SKEL: Three.js 3D runner (rig, outfit, animations, off-axis camera)
     core/generator.ts     seeded fair track generator (pure TS, unit-tested)
     art/                  procedural painters + per-city "kits"
     audio/engine.ts       procedural music & SFX

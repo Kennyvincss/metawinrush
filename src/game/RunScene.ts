@@ -7,6 +7,7 @@ import { makeCanvas } from "./art/canvas";
 import { buildCityKit, releaseOtherKits, type CityKit, type ObstacleArt, type WallStyle } from "./art/kits";
 import { paintFx, paintPowerUp, POWERUP_COLORS } from "./art/props";
 import { BLD_PX } from "./art/buildings";
+import { Character3D, TARGET_HEIGHT, type Anim } from "./character3d";
 import {
   CAM_BACK,
   CAM_HEIGHT,
@@ -183,6 +184,15 @@ export class RunScene extends Phaser.Scene {
   private hudTimer = 0;
   private trailTimer = 0;
 
+  // 3D runner (falls back to 2D sprites if WebGL/model is unavailable)
+  private c3: Character3D | null = null;
+  private c3Anim: Anim | null = null;
+  private stumbleT = 0;
+  private frameDt = 0;
+  private c3Dt = 0; // animation time accumulated while a 3D frame is skipped
+  private c3Skip = false;
+  private avgFrameMs = 16;
+
   // tutorial
   private tutorialStep = -1;
   private tutorialFrozen = false;
@@ -295,6 +305,14 @@ export class RunScene extends Phaser.Scene {
     this.player = this.add.image(0, 0, this.runnerKey("run0")).setOrigin(0.5, 472 / 480).setDepth(9500);
     this.aura = this.add.image(0, 0, "fx:ring").setDepth(9600).setVisible(false).setBlendMode(Phaser.BlendModes.ADD);
     this.flash = this.add.rectangle(0, 0, 10, 10, 0xffffff, 0).setOrigin(0, 0).setDepth(30000);
+    this.c3 = Character3D.instance;
+    this.c3Anim = null;
+    if (this.c3) {
+      this.c3.setLook(this.cfg.look, this.cfg.helmet);
+      this.c3.setRimColors(pal.neon[0], pal.neon[1 % pal.neon.length]);
+      if (this.textures.exists("runner3d")) this.textures.remove("runner3d");
+      this.textures.addImage("runner3d", this.c3.canvas as unknown as HTMLImageElement);
+    }
 
     this.gen = new TrackGenerator(this.cfg.seed, this.kit.city.difficulty, this.kit.catalog, this.cfg.tutorial ? 360 : 70);
     this.rand = mulberry32(this.cfg.seed ^ 0x9e3779b9);
@@ -318,9 +336,9 @@ export class RunScene extends Phaser.Scene {
   private layout() {
     this.W = this.scale.width;
     this.H = this.scale.height;
-    // Fit three lanes into ~96% of the width (portrait) and keep the runner near the bottom.
+    // Portrait: zoom so the three lane centres sit well inside the screen; keep the runner near the bottom.
     const roadWidthAtPlayer = LANE_W * 3 + 0.6;
-    const sW = (this.W * 0.96) / roadWidthAtPlayer;
+    const sW = (this.W * 1.2) / roadWidthAtPlayer; // outer lanes stay on screen; hero reads bigger
     const feetY = this.H * 0.8;
     const sH = (feetY - this.H * 0.3) / CAM_HEIGHT;
     const s = Math.min(sW, sH);
@@ -434,6 +452,8 @@ export class RunScene extends Phaser.Scene {
     let dt = Math.min(0.05, deltaMs / 1000);
     if (this.tutorialFrozen) dt = 0;
     if (this.phase === "crash") dt *= 0.35;
+    this.frameDt = dt;
+    this.avgFrameMs += (deltaMs - this.avgFrameMs) * 0.05;
 
     if (this.phase === "intro") this.updateIntro(dt);
     else if (this.phase === "run") this.updateRun(dt);
@@ -851,6 +871,7 @@ export class RunScene extends Phaser.Scene {
     this.laneStartX = this.px;
     this.laneT = 0;
     this.shake = 0.3;
+    this.stumbleT = 0.4;
     audio.play("stumble");
     this.cb.onEvent?.({ type: "stumble" });
     if (now - this.stumbleAt < 5000 && !this.shield) {
@@ -1402,9 +1423,14 @@ export class RunScene extends Phaser.Scene {
       if (e === "emote_pose") scaleY = 1 + Math.sin(t * Math.PI * 3) * 0.06;
     }
     const lean = this.laneT < 1 ? (laneX(this.lane) - this.laneStartX > 0 ? 8 : -8) * (1 - this.laneT) : 0;
+    if (this.c3) {
+      this.drawPlayer3D(feet, ground, dz, lean);
+      return;
+    }
     const h = PLAYER_H * 1.2 * feet.s;
     this.player
       .setTexture(this.runnerKey(frame))
+      .setOrigin(0.5, 472 / 480)
       .setPosition(feet.x, feet.y)
       .setDisplaySize((h * 320) / 480, h * scaleY)
       .setAngle(angle + lean)
@@ -1421,6 +1447,11 @@ export class RunScene extends Phaser.Scene {
       .setDisplaySize(1.3 * ground.s * shadowScale, 0.45 * ground.s * shadowScale)
       .setDepth(this.depthFor(dz) - 2);
 
+    this.drawAura(dz);
+  }
+
+  private drawAura(dz: number) {
+    const pz = this.dist;
     // shield / magnet aura
     const auraKind = this.shield ? "shield" : this.active.magnet ? "magnet" : this.active.superjump ? "superjump" : null;
     if (auraKind) {
@@ -1434,6 +1465,84 @@ export class RunScene extends Phaser.Scene {
         .setAlpha(0.75)
         .setDepth(this.depthFor(dz) + 4);
     } else this.aura.setVisible(false);
+  }
+
+  /** Animate + render the 3D runner and composite it as a sprite aligned with the game camera. */
+  private drawPlayer3D(feet: { x: number; y: number; s: number }, ground: { x: number; y: number; s: number }, dz: number, lean: number) {
+    const c3 = this.c3!;
+    const pz = this.dist;
+    const dt = this.frameDt;
+    if (this.stumbleT > 0) this.stumbleT -= dt;
+    // choose the animation
+    let want: Anim;
+    let ts = 1;
+    if (this.phase === "crash" || this.phase === "ended") want = "crash";
+    else if (this.phase === "intro" && this.cfg.emote === "emote_pose" && this.introT < 0.9) want = "dance";
+    else if (this.jumpT >= 0 && this.py > 0.05) want = "jump";
+    else if (this.slideT >= 0) {
+      want = "roll";
+      ts = c3.clipDuration("roll") / SLIDE_TIME;
+    } else if (this.stumbleT > 0) want = "stumble";
+    else {
+      want = "run";
+      ts = Phaser.Math.Clamp(this.speed / 21, 0.55, 1.55);
+    }
+    if (want !== this.c3Anim) {
+      c3.play(want, want === "jump" ? 0.08 : want === "crash" ? 0.05 : 0.14, ts);
+      this.c3Anim = want;
+    } else if (want === "run") c3.play("run", 0, ts);
+    // intro emotes
+    let spin = 0,
+      pitch = 0;
+    if (this.phase === "intro") {
+      const t = Math.min(1, this.introT / 1.5);
+      if (this.cfg.emote === "emote_spin") spin = t * Math.PI * 2;
+      if (this.cfg.emote === "emote_flip" && t < 0.7) pitch = (t / 0.7) * Math.PI * 2;
+    }
+    c3.setPose({ lean: (-lean * Math.PI) / 180, yaw: (-lean * Math.PI) / 360, spin, pitch });
+    // screen rectangle the texture covers (2.6 m wide window around the runner)
+    const top = this.proj(this.px, this.py + TARGET_HEIGHT + 0.55, pz)!;
+    const bottom = this.proj(this.px, this.py - 0.55, pz)!;
+    const h = bottom.y - top.y;
+    const w = (h * 320) / 384;
+    const rect = { x: feet.x - w / 2, y: top.y, w, h };
+    const curve = this.curveK * dz * dz;
+    // On slow devices render the 3D runner every other frame (animation time still accumulates).
+    this.c3Dt += dt;
+    this.c3Skip = this.avgFrameMs > 24 ? !this.c3Skip : false;
+    if (this.c3Skip) {
+      this.player.setPosition(rect.x, rect.y).setDisplaySize(w, h).setDepth(this.depthFor(dz) + 3);
+      return;
+    }
+    const animDt = this.c3Dt;
+    this.c3Dt = 0;
+    c3.render(animDt, {
+      screenW: this.W,
+      screenH: this.H,
+      horizon: this.horizon,
+      focal: this.focal,
+      rect,
+      camOffsetX: this.camX - this.px - curve,
+      camHeight: this.camH,
+      camBack: this.camBack,
+      runnerY: this.py,
+    });
+    this.textures.get("runner3d").source[0].update();
+    this.player
+      .setTexture("runner3d")
+      .setOrigin(0, 0)
+      .setScale(1)
+      .setAngle(0)
+      .setPosition(rect.x, rect.y)
+      .setDisplaySize(w, h)
+      .setDepth(this.depthFor(dz) + 3)
+      .setAlpha(this.invuln > 0 && this.phase === "run" ? (Math.sin(this.time.now / 40) > 0 ? 0.45 : 1) : 1);
+    const shadowScale = 1 / (1 + this.py * 0.5);
+    this.shadow
+      .setPosition(ground.x, ground.y)
+      .setDisplaySize(1.3 * ground.s * shadowScale, 0.45 * ground.s * shadowScale)
+      .setDepth(this.depthFor(dz) - 2);
+    this.drawAura(dz);
   }
 }
 

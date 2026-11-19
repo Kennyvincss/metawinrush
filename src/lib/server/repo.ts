@@ -5,7 +5,7 @@ import { DEFAULT_EQUIPPED, type ItemSlot } from "../data/cosmetics";
 import { levelForXp } from "../data/rewards";
 import { GameRuleError, newCtx, type Ctx } from "../progression/engine";
 import { dayKey, monthKey, weekKey } from "../progression/periods";
-import { emptyStats, randomRunnerName, type PlayerState } from "../progression/state";
+import { emptyStats, isLegacyGeneratedName, randomRunnerName, type PlayerState } from "../progression/state";
 import { currentTournaments } from "../tournaments";
 import { admin } from "./supabase";
 
@@ -43,6 +43,17 @@ export async function loadPlayer(userId: string, now = new Date(), preferredName
   if (!profile) {
     await bootstrap(db, userId, preferredName);
     profile = check(await db.from("profiles").select("*").eq("id", userId).single(), "profile");
+  }
+  // Auto-generated names from older versions become SKEL names (custom names are left alone).
+  if (isLegacyGeneratedName(profile.username)) {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const username = randomRunnerName();
+      const { error } = await db.from("profiles").update({ username }).eq("id", userId);
+      if (!error) {
+        profile = { ...profile, username };
+        break;
+      }
+    }
   }
   const periods = [dayKey(now), weekKey(now), monthKey(now)];
   const [stats, bal, cities, inv, ach, mis, lastDaily, dailyCount] = await Promise.all([

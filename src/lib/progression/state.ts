@@ -96,8 +96,12 @@ export function isValidUsername(name: string): boolean {
   return USERNAME_RE.test(name);
 }
 
+/** Default runner name: SKEL plus a short number so usernames stay unique online. */
 export function randomRunnerName(): string {
-  const a = ["Neon", "Cyber", "Volt", "Shadow", "Turbo", "Nova", "Pixel", "Chrome", "Hyper", "Glitch"];
-  const b = ["Runner", "Rush", "Dash", "Ghost", "Blade", "Comet", "Fox", "Raven", "Pulse", "Wolf"];
-  return `${a[Math.floor(Math.random() * a.length)]}${b[Math.floor(Math.random() * b.length)]}${Math.floor(Math.random() * 900 + 100)}`;
+  return `SKEL_${Math.floor(Math.random() * 9000 + 1000)}`;
+}
+
+/** Names produced by the previous generator (e.g. "NeonRunner482"); these get migrated to SKEL names. */
+export function isLegacyGeneratedName(name: string): boolean {
+  return /^(Neon|Cyber|Volt|Shadow|Turbo|Nova|Pixel|Chrome|Hyper|Glitch)(Runner|Rush|Dash|Ghost|Blade|Comet|Fox|Raven|Pulse|Wolf)\d{3}$/.test(name);
 }

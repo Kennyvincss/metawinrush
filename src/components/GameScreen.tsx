@@ -56,7 +56,9 @@ export default function GameScreen() {
     setTutorial(null);
     setTitleCard(true);
     try {
-      const { sessionId, seed } = await backend.startRun(city);
+      // The 3D runner model (~2 MB) loads once and is reused; falls back to 2D sprites if unavailable.
+      const [{ Character3D }, { sessionId, seed }] = await Promise.all([import("@/game/character3d"), backend.startRun(city)]);
+      await Character3D.load();
       const eq = s.equipped;
       ctrl.current.start(
         {

@@ -5,7 +5,7 @@ import type { ItemSlot } from "../data/cosmetics";
 import { levelForXp } from "../data/rewards";
 import { applyRun, buyCity, claimDaily, claimMission, equipItem, newCtx, purchaseItem, renamePlayer, unequipSlot } from "../progression/engine";
 import { periodStart, type LeaderboardPeriod } from "../progression/periods";
-import { newPlayerState, randomRunnerName, type PlayerSettings, type PlayerState } from "../progression/state";
+import { isLegacyGeneratedName, newPlayerState, randomRunnerName, type PlayerSettings, type PlayerState } from "../progression/state";
 import type { RunResult } from "../rules";
 import { currentTournaments } from "../tournaments";
 import type { Backend, Leaderboard, LeaderboardEntry, TournamentDetail, TournamentView } from "./types";
@@ -54,6 +54,8 @@ export class LocalBackend implements Backend {
     // Merge in fields added in later versions.
     const fresh = newPlayerState(this.state.userId, this.state.username);
     this.state = { ...fresh, ...this.state, settings: { ...fresh.settings, ...this.state.settings }, equipped: { ...fresh.equipped, ...this.state.equipped } };
+    // Auto-generated names from older versions ("NeonRunner482") become SKEL names; chosen names are kept.
+    if (isLegacyGeneratedName(this.state.username)) this.state.username = randomRunnerName();
     return this.save(this.state);
   }
 

@@ -59,7 +59,10 @@ export default function Home() {
               Play
             </button>
           </div>
-          <img src="/brand/character.jpg" alt="The Masked One — the Metawin runner" className="h-36 w-36 animate-floaty rounded-3xl object-cover shadow-cyan sm:h-52 sm:w-52" />
+          <div className="relative animate-floaty">
+            <img src="/brand/character.jpg" alt="SKEL — the Metawin runner" className="h-36 w-36 rounded-3xl object-cover shadow-cyan sm:h-52 sm:w-52" />
+            <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-full border border-mw-cyan/50 bg-ink-950/90 px-3 py-0.5 font-display text-xs font-black tracking-[0.3em] text-mw-cyan shadow-cyan">SKEL</div>
+          </div>
         </div>
       </section>
 

@@ -121,3 +121,17 @@ describe("progression", () => {
     expect(levelForXp(xpForLevel(10))).toBe(10);
   });
 });
+
+describe("runner names", () => {
+  it("generates SKEL names that are valid usernames", async () => {
+    const { randomRunnerName, isValidUsername, isLegacyGeneratedName } = await import("@/lib/progression/state");
+    for (let i = 0; i < 50; i++) {
+      const n = randomRunnerName();
+      expect(n).toMatch(/^SKEL_\d{4}$/);
+      expect(isValidUsername(n)).toBe(true);
+      expect(isLegacyGeneratedName(n)).toBe(false);
+    }
+    expect(isLegacyGeneratedName("NeonRunner482")).toBe(true);
+    expect(isLegacyGeneratedName("NeonKing")).toBe(false); // custom names are kept
+  });
+});

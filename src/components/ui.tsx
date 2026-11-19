@@ -119,7 +119,27 @@ export const Portrait = memo(function Portrait({ characterId, helmet = "helm_sta
     const r = Math.min(2, window.devicePixelRatio || 1);
     c.width = size * r;
     c.height = size * r;
+    // Instant 2D painting, then swap in a render of the real 3D runner once the model is loaded.
     paintCharacterFront(c, getLook(characterId), helmet, { background });
+    let live = true;
+    void import("@/game/character3d").then(async ({ Character3D }) => {
+      const c3 = await Character3D.load();
+      if (!live || !c3) return;
+      const shot = c3.snapshot(getLook(characterId), helmet, c.width);
+      const ctx = c.getContext("2d")!;
+      ctx.clearRect(0, 0, c.width, c.height);
+      if (background) {
+        const g = ctx.createRadialGradient(c.width / 2, c.height * 0.45, 4, c.width / 2, c.height * 0.45, c.width * 0.75);
+        g.addColorStop(0, "#2a0d4a");
+        g.addColorStop(1, "#05030b");
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, c.width, c.height);
+      }
+      ctx.drawImage(shot, 0, 0, c.width, c.height);
+    });
+    return () => {
+      live = false;
+    };
   }, [characterId, helmet, size, background]);
   return <canvas ref={ref} style={{ width: size, height: size }} className={className} />;
 });

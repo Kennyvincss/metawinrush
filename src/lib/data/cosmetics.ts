@@ -46,8 +46,8 @@ export const COSMETICS: CosmeticItem[] = [
   {
     id: "char_masked",
     slot: "character",
-    name: "The Masked One",
-    description: "The original Metawin runner. Silver helm, black visor, violet coat.",
+    name: "SKEL",
+    description: "The original Metawin runner. Chrome helm, black visor, violet coat.",
     price: 0,
     rarity: "Legendary",
     look: ORIGINAL,
