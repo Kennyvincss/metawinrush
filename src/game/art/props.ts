@@ -495,3 +495,77 @@ export function paintFx(): Record<string, HTMLCanvasElement> {
   }
   return out;
 }
+
+// ── City portal (gate between two cities in a world-tour run) ───────────
+
+export const PORTAL_W = 13; // meters
+export const PORTAL_H = 9.5;
+
+export function paintPortal(next: CityDef): HTMLCanvasElement {
+  const PXM = 80;
+  const W = PORTAL_W * PXM,
+    H = PORTAL_H * PXM;
+  const [c, ctx] = makeCanvas(W, H);
+  const [c1, c2] = [next.palette.neon[0], next.palette.neon[1 % next.palette.neon.length]];
+  const cx = W / 2;
+  const R = W * 0.44;
+  const cy = H - 30; // arch springs from the road
+  // inner energy field (transparent centre so the road stays visible)
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, R - 34, Math.PI, 0);
+  ctx.closePath();
+  ctx.clip();
+  ctx.fillStyle = rg(ctx, cx, cy, R * 0.15, R, [withAlpha(c2, 0), withAlpha(c2, 0.08), withAlpha(c1, 0.35)]);
+  ctx.fillRect(0, 0, W, H);
+  ctx.restore();
+  // arch pillars + ring
+  for (const [w, col, blur] of [
+    [46, "#0b0614", 0],
+    [16, c1, 40],
+    [6, "#ffffff", 18],
+  ] as [number, string, number][]) {
+    glow(ctx, col, blur, () => {
+      ctx.strokeStyle = col;
+      ctx.lineWidth = w;
+      ctx.beginPath();
+      ctx.arc(cx, cy, R, Math.PI, 0);
+      ctx.stroke();
+    });
+  }
+  glow(ctx, c2, 30, () => {
+    ctx.strokeStyle = c2;
+    ctx.lineWidth = 8;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R - 30, Math.PI * 1.04, Math.PI * 1.96);
+    ctx.stroke();
+  });
+  // chevrons along the ring
+  for (let i = 1; i < 12; i++) {
+    const a = Math.PI + (i / 12) * Math.PI;
+    glow(ctx, c2, 14, () => {
+      ctx.fillStyle = c2;
+      ctx.beginPath();
+      ctx.arc(cx + Math.cos(a) * (R + 30), cy + Math.sin(a) * (R + 30), 7, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  }
+  // sign
+  const sw = W * 0.56,
+    sh = 150,
+    sx = cx - sw / 2,
+    sy = cy - R - sh / 2 + 6;
+  ctx.fillStyle = "#06040c";
+  rr(ctx, sx, sy, sw, sh, 22);
+  ctx.fill();
+  glow(ctx, c1, 26, () => {
+    ctx.strokeStyle = c1;
+    ctx.lineWidth = 5;
+    rr(ctx, sx + 4, sy + 4, sw - 8, sh - 8, 18);
+    ctx.stroke();
+  });
+  drawGlyph(ctx, sx + 22, sy + 22, sh - 44, "#ffffff", c1, 18);
+  text(ctx, "NEXT CITY", cx + 40, sy + 44, 30, c2, { maxWidth: sw - 200, glow: c2 });
+  text(ctx, next.name.toUpperCase(), cx + 40, sy + 100, 64, "#ffffff", { maxWidth: sw - 200, glow: c1 });
+  return c;
+}

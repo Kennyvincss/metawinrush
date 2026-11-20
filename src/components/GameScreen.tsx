@@ -43,7 +43,9 @@ export default function GameScreen() {
   const [runId, setRunId] = useState(0);
   const stateRef = useRef(state);
   stateRef.current = state;
-  const cityDef = getCity(city);
+  const [cityNow, setCityNow] = useState(city);
+  const [arrival, setArrival] = useState(0); // >0 when the title card announces a new city mid-run
+  const cityDef = getCity(cityNow);
 
   const begin = useCallback(async () => {
     const s = stateRef.current;
@@ -55,6 +57,8 @@ export default function GameScreen() {
     setSubmitError(null);
     setTutorial(null);
     setTitleCard(true);
+    setCityNow(city);
+    setArrival(0);
     try {
       // The 3D runner model (~2 MB) loads once and is reused; falls back to 2D sprites if unavailable.
       const [{ Character3D }, { sessionId, seed }] = await Promise.all([import("@/game/character3d"), backend.startRun(city)]);
@@ -77,6 +81,12 @@ export default function GameScreen() {
           sfx: s.settings.sfx,
         },
         {
+          onCityChange: (id, leg) => {
+            setCityNow(id);
+            setArrival(leg);
+            setTitleCard(true);
+            setTimeout(() => setTitleCard(false), 2200);
+          },
           onReady: () => {
             setPhase("playing");
             setTimeout(() => setTitleCard(false), 1700);
@@ -169,6 +179,7 @@ export default function GameScreen() {
       {titleCard && phase !== "error" && (
         <div className="pointer-events-none absolute inset-0 grid place-items-center">
           <div className="animate-pop text-center">
+            {arrival > 0 && <div className="mb-1 font-display text-[11px] font-bold uppercase tracking-[0.5em] text-amber-300">City {arrival + 1} · Welcome to</div>}
             <div className="font-display text-[11px] font-bold uppercase tracking-[0.5em] text-mw-cyan">{cityDef.theme}</div>
             <div className="heading text-5xl drop-shadow-[0_0_24px_rgba(180,77,255,.8)] sm:text-6xl">{cityDef.name}</div>
             <div className="mt-1 text-xs uppercase tracking-[0.3em] text-white/60">{cityDef.tagline}</div>
@@ -188,6 +199,12 @@ export default function GameScreen() {
                 <span className="rounded bg-mw-violet/40 px-1.5 py-0.5 text-white">×{hud.multiplier.toFixed(1)}</span>
                 <span className="tabular-nums">{hud.distance.toLocaleString()} m</span>
               </div>
+              {hud.toNext >= 0 && (
+                <div className="mt-1 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-white/60" data-testid="next-city">
+                  <Icon name="plane" className="h-3 w-3 text-mw-cyan" />
+                  {getCity(hud.nextCity).name} · <span className="tabular-nums">{hud.toNext.toLocaleString()} m</span>
+                </div>
+              )}
             </div>
             <div className="flex items-start gap-2">
               <div className="rounded-2xl bg-black/35 px-3 py-2 backdrop-blur-sm">

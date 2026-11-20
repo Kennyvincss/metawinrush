@@ -32,7 +32,7 @@ To enable accounts, global leaderboards and the Arena, see [Online mode (Supabas
 | Slide | Swipe down | ↓ or S |
 | Pause | Pause button | Esc or P |
 
-There are no on-screen direction buttons. Swipes are detected on pointer-move (no need to lift your finger), several swipes can be chained in one touch, and page scrolling is blocked during play (`touch-action: none`). First-time players get an interactive tutorial: the game freezes at each obstacle until the right swipe is made. It can be replayed from **Profile → Settings**.
+There are no on-screen direction buttons. Swipes are detected on pointer-move, so you don't need to lift your finger, and page scrolling is blocked during play (`touch-action: none`). Up and down trigger after a short 26 px flick. Left and right need a longer drag (48 px) that is clearly sideways, so lane changes don't fire by accident. Each touch changes lanes at most once, so lift your finger to change again. You can still swipe sideways and then flick up or down in the same touch. The values are at the top of `src/game/index.ts`. First-time players get an interactive tutorial: the game freezes at each obstacle until the right swipe is made. It can be replayed from **Profile → Settings**.
 
 ## What's in the game
 
@@ -46,6 +46,8 @@ There are no on-screen direction buttons. Swipes are detected on pointer-move (n
 Unit tests check these rules across all cities and many seeds.
 
 **Coins and power-ups.** Coins come in city-specific designs, laid as trails and as arcs over jumpable obstacles. The five power-ups are **Magnet**, **Shield**, **Score ×2**, **Coins ×2** and **Super Jump**, each with HUD timers and auras.
+
+**City-to-city runs.** Every run is a world tour. You start in the city you picked; after 800 m the track clears and a glowing portal announces the next city. Running through it flashes you straight into that city's streets, music and traffic, and the tour continues through all eight cities, looping back to the start. Speed never drops between cities. The HUD shows the next city and the distance to its portal, and each run's route credits distance to every city you ran through, which counts toward Tokyo Explorer and Globetrotter. The starting city is what unlocks gate, and what city tournaments and leaderboards use.
 
 **Eight cities.** Each has its own sky, landmark skyline, street-wall architecture, props, vehicles, barriers, coin design, ambient weather, music and difficulty:
 

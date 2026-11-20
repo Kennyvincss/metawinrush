@@ -33,6 +33,9 @@ export interface HudState {
   jumps: number;
   slides: number;
   dodges: number;
+  city: CityId;
+  nextCity: CityId;
+  toNext: number; // meters to the next city portal
 }
 
 export type TutorialStep = { action: GameAction; text: string; index: number; total: number } | { done: true } | null;
@@ -43,5 +46,6 @@ export interface GameCallbacks {
   onTutorial(step: TutorialStep): void;
   onPauseRequest(): void;
   onReady(): void;
+  onCityChange?(city: CityId, leg: number): void;
   onEvent?(e: { type: "powerup"; kind: PowerUpKind } | { type: "stumble" } | { type: "shieldBreak" } | { type: "newBest" }): void;
 }

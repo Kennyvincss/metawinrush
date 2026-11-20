@@ -5,7 +5,8 @@ import { getItem } from "@/lib/data/cosmetics";
 import { audio } from "./audio/engine";
 import { makeCanvas } from "./art/canvas";
 import { buildCityKit, releaseOtherKits, type CityKit, type ObstacleArt, type WallStyle } from "./art/kits";
-import { paintFx, paintPowerUp, POWERUP_COLORS } from "./art/props";
+import { CITIES, type CityId } from "@/lib/data/cities";
+import { paintFx, paintPortal, paintPowerUp, PORTAL_H, PORTAL_W, POWERUP_COLORS } from "./art/props";
 import { BLD_PX } from "./art/buildings";
 import { Character3D, TARGET_HEIGHT, type Anim } from "./character3d";
 import {
@@ -33,6 +34,9 @@ import { TrackGenerator, mulberry32, speedAt, type GenObstacle } from "./core/ge
 import type { GameAction, GameCallbacks, HudState, LaunchConfig } from "./types";
 
 const NEAR = 0.6;
+/** Meters per city in a world-tour run. */
+export const LEG_LENGTH = 800;
+const RUNWAY = 70; // obstacle-free stretch before each portal and after each arrival
 const SEG = 4;
 
 interface Obs {
@@ -184,6 +188,16 @@ export class RunScene extends Phaser.Scene {
   private hudTimer = 0;
   private trailTimer = 0;
 
+  // world tour: the run moves from city to city through portals
+  private cityId!: CityId;
+  private tour: CityId[] = [];
+  private leg = 0;
+  private nextLegZ = 0;
+  private legStartZ = 0;
+  private route: { city: CityId; distance: number }[] = [];
+  private portal: { img: Phaser.GameObjects.Image; z: number; key: string } | null = null;
+  private speedFloor = 0;
+
   // 3D runner (falls back to 2D sprites if WebGL/model is unavailable)
   private c3: Character3D | null = null;
   private c3Anim: Anim | null = null;
@@ -238,6 +252,15 @@ export class RunScene extends Phaser.Scene {
     this.shake = 0;
     this.tutorialStep = this.cfg.tutorial ? 0 : -1;
     this.tutorialFrozen = false;
+    this.cityId = this.cfg.city;
+    const start = CITIES.findIndex((c) => c.id === this.cfg.city);
+    this.tour = CITIES.map((_, i) => CITIES[(start + i) % CITIES.length].id);
+    this.leg = 0;
+    this.legStartZ = 0;
+    this.nextLegZ = this.cfg.tutorial ? Number.POSITIVE_INFINITY : LEG_LENGTH;
+    this.route = [];
+    this.portal = null;
+    this.speedFloor = 0;
     this.tutorialObsZ = 0;
     resetTutorial();
   }
@@ -248,14 +271,27 @@ export class RunScene extends Phaser.Scene {
     this.textures.addCanvas(key, canvas);
   }
 
-  private prepareTextures() {
-    const id = this.cfg.city;
+  private unloadCitiesExcept(id: CityId) {
     releaseOtherKits(id);
-    // free other cities' GPU textures
     for (const key of this.textures.getTextureKeys()) {
       const m = /^city:([a-z]+):/.exec(key);
       if (m && m[1] !== id) this.textures.remove(key);
     }
+  }
+
+  private prepareTextures() {
+    this.unloadCitiesExcept(this.cfg.city);
+    this.loadCity(this.cfg.city);
+    if (!this.textures.exists("fx:dot")) {
+      const fx = paintFx();
+      for (const [name, c] of Object.entries(fx)) this.addTex(`fx:${name}`, c);
+      for (const kind of Object.keys(POWERUP_COLORS) as PowerUpKind[]) this.addTex(`pu:${kind}`, paintPowerUp(kind));
+    }
+    this.prepareRunnerFrames();
+  }
+
+  /** Build (or reuse) a city's art kit and register its textures. */
+  private loadCity(id: CityId) {
     this.kit = buildCityKit(id);
     const k = this.kit;
     const p = `city:${id}:`;
@@ -266,13 +302,10 @@ export class RunScene extends Phaser.Scene {
     k.buildings.forEach((b, i) => this.addTex(`${p}bld${i}`, b.canvas));
     k.props.forEach((pr, i) => this.addTex(`${p}prop${i}`, pr.tex.canvas));
     for (const kind of Object.keys(k.art) as (keyof CityKit["art"])[]) k.art[kind].forEach((a, i) => this.addTex(`${p}${kind}${i}`, a.canvas));
+  }
 
-    if (!this.textures.exists("fx:dot")) {
-      const fx = paintFx();
-      for (const [name, c] of Object.entries(fx)) this.addTex(`fx:${name}`, c);
-      for (const kind of Object.keys(POWERUP_COLORS) as PowerUpKind[]) this.addTex(`pu:${kind}`, paintPowerUp(kind));
-    }
-    // runner frames for the equipped look
+  private prepareRunnerFrames() {
+    // runner frames for the equipped look (2D fallback)
     const rk = `runner:${this.cfg.characterId}:${this.cfg.helmet}:`;
     if (!this.textures.exists(rk + "run0")) {
       const poses: [string, BackPose][] = [];
@@ -489,7 +522,9 @@ export class RunScene extends Phaser.Scene {
   private updateRun(dt: number) {
     const diff = this.kit.city.difficulty;
     this.elapsed += dt * 1000;
-    this.speed = this.cfg.tutorial && this.tutorialStep >= 0 ? diff.baseSpeed : speedAt(diff, this.dist);
+    // Speed never drops when the tour enters an easier city.
+    this.speed = this.cfg.tutorial && this.tutorialStep >= 0 ? diff.baseSpeed : Math.max(this.speedFloor, speedAt(diff, this.dist));
+    if (this.tutorialStep < 0) this.speedFloor = this.speed;
     const dd = this.speed * dt;
     this.dist += dd;
     const boost = !!this.active.scoreboost;
@@ -542,10 +577,15 @@ export class RunScene extends Phaser.Scene {
     // generation
     if (this.tutorialStep >= 0) this.updateTutorial();
     else {
-      const batch = this.gen.generate(this.dist + GEN_LOOKAHEAD, (z) => speedAt(diff, z));
-      for (const o of batch.obstacles) this.spawnObstacle(o);
-      for (const c of batch.coins) this.spawnCoin(laneX(c.lane), c.y, c.z);
-      for (const p of batch.powerups) this.spawnPowerUp(p.kind, laneX(p.lane), p.z);
+      // Stop building track before the portal so every city change has a clear runway.
+      const limit = Math.min(this.dist + GEN_LOOKAHEAD, this.nextLegZ - RUNWAY);
+      const runwayStart = this.nextLegZ - RUNWAY + 20;
+      const batch = this.gen.generate(limit, (z) => Math.max(this.speedFloor, speedAt(diff, z)));
+      for (const o of batch.obstacles) if (o.z + o.len < runwayStart) this.spawnObstacle(o);
+      for (const c of batch.coins) if (c.z < runwayStart) this.spawnCoin(laneX(c.lane), c.y, c.z);
+      for (const p of batch.powerups) if (p.z < runwayStart) this.spawnPowerUp(p.kind, laneX(p.lane), p.z);
+      if (!this.portal && this.nextLegZ - this.dist < DRAW_DIST + 30) this.spawnPortal();
+      if (this.dist >= this.nextLegZ) this.enterNextCity();
     }
 
     this.collide(this.dist - dd);
@@ -589,10 +629,14 @@ export class RunScene extends Phaser.Scene {
       jumps: this.jumps,
       slides: this.slides,
       dodges: this.dodges,
+      city: this.cityId,
+      nextCity: this.tour[(this.leg + 1) % this.tour.length],
+      toNext: Number.isFinite(this.nextLegZ) ? Math.max(0, Math.floor(this.nextLegZ - this.dist)) : -1,
     };
   }
 
   private result(): RunResult {
+    const route = [...this.route, { city: this.cityId, distance: Math.max(0, Math.floor(this.dist - this.legStartZ)) }].filter((l, i) => i === 0 || l.distance > 0);
     return {
       sessionId: this.cfg.sessionId,
       city: this.cfg.city,
@@ -607,7 +651,78 @@ export class RunScene extends Phaser.Scene {
       laneChanges: this.laneChanges,
       boostSeconds: Math.round(this.boostSeconds * 10) / 10,
       tutorial: this.cfg.tutorial,
+      route,
     };
+  }
+
+  // ── World tour ─────────────────────────────────────────────────────────
+  private spawnPortal() {
+    const next = CITIES.find((c) => c.id === this.tour[(this.leg + 1) % this.tour.length])!;
+    const key = `portal:${this.leg}`;
+    if (!this.textures.exists(key)) this.addTex(key, paintPortal(next));
+    const img = this.getImg(key);
+    this.portal = { img, z: this.nextLegZ, key };
+    // a coin trail leads into the gate
+    for (let i = 0; i < 12; i++) this.spawnCoin(0, 0.9, this.nextLegZ - RUNWAY + 18 + i * 3.2);
+  }
+
+  /** Swap the whole world to the next city while the warp flash covers the screen. */
+  private enterNextCity() {
+    const prev = this.cityId;
+    this.route.push({ city: prev, distance: Math.floor(this.nextLegZ - this.legStartZ) });
+    this.leg++;
+    const id = this.tour[this.leg % this.tour.length];
+    this.cityId = id;
+    this.legStartZ = this.nextLegZ;
+    this.nextLegZ = this.legStartZ + LEG_LENGTH;
+
+    // flash + warp streaks hide the swap
+    this.flash.setFillStyle(0xffffff, 1);
+    this.tweens.add({ targets: this.flash, fillAlpha: 0, duration: 650, ease: "Quad.easeOut" });
+    audio.play("whoosh");
+
+    // clear the old city
+    for (const s of this.scenery) {
+      this.freeImg(s.img);
+      if (s.wall) this.freeGfx(s.wall.g);
+    }
+    this.scenery = [];
+    for (const o of this.obstacles) o.dead = true;
+    for (const c of this.coins) c.dead = true;
+    for (const p of this.pus) p.dead = true;
+    for (const p of this.particles) if (p.screen) p.life = 0;
+    if (this.portal) {
+      const old = this.portal;
+      this.portal = null;
+      this.time.delayedCall(800, () => {
+        this.freeImg(old.img);
+        if (this.textures.exists(old.key)) this.textures.remove(old.key);
+      });
+    }
+
+    // load the new one
+    this.loadCity(id);
+    const pal = this.kit.city.palette;
+    this.cameras.main.setBackgroundColor(pal.skyTop);
+    this.sky.setTexture(`city:${id}:sky`);
+    this.far.setTexture(`city:${id}:far`);
+    this.near.setTexture(`city:${id}:near`);
+    this.layout();
+    this.sceneryCursor = [this.dist - 25, this.dist - 18];
+    this.propCursor = this.kit.props.map(() => this.dist - 10 + this.rand() * 20);
+    this.gen = new TrackGenerator((this.cfg.seed + this.leg * 7919) >>> 0, this.kit.city.difficulty, this.kit.catalog, this.dist + RUNWAY);
+    this.c3?.setRimColors(pal.neon[0], pal.neon[1 % pal.neon.length]);
+    audio.playMusic(id);
+    for (let i = 0; i < 16; i++) this.warpStreak();
+    this.cb.onCityChange?.(id, this.leg);
+
+    // free the previous city's textures once nothing references them
+    this.time.delayedCall(900, () => {
+      if (this.cityId !== prev) {
+        for (const key of this.textures.getTextureKeys()) if (key.startsWith(`city:${prev}:`)) this.textures.remove(key);
+        releaseOtherKits(this.cityId);
+      }
+    });
   }
 
   // ── Tutorial ───────────────────────────────────────────────────────────
@@ -617,6 +732,7 @@ export class RunScene extends Phaser.Scene {
       // finished: hand over to the normal generator just ahead of the player
       this.tutorialStep = -1;
       this.gen.cursor = this.dist + 40;
+      this.nextLegZ = this.dist + LEG_LENGTH;
       this.cb.onTutorial({ done: true });
       return;
     }
@@ -648,13 +764,13 @@ export class RunScene extends Phaser.Scene {
   // ── Spawning ───────────────────────────────────────────────────────────
   private spawnObstacle(o: GenObstacle) {
     const art = this.kit.art[o.kind][o.variant];
-    const img = this.getImg(`city:${this.cfg.city}:${o.kind}${o.variant}`);
+    const img = this.getImg(`city:${this.cityId}:${o.kind}${o.variant}`);
     const g = art.box ? this.getGfx() : null;
     this.obstacles.push({ gen: o, art, x: laneX(o.lane), z: o.z, img, g, moving: false, passed: false, dead: false });
   }
 
   private spawnCoin(x: number, y: number, z: number) {
-    const img = this.getImg(`city:${this.cfg.city}:coin`);
+    const img = this.getImg(`city:${this.cityId}:coin`);
     img.setOrigin(0.5, 0.5);
     this.coins.push({ x, y, z, img, pulled: false, dead: false });
   }
@@ -676,7 +792,7 @@ export class RunScene extends Phaser.Scene {
         const sgn = side === 0 ? -1 : 1;
         const gap = k.buildingGap + this.rand() * 1.5;
         const x = sgn * (ROAD_HALF + gap + b.w / 2);
-        const img = this.getImg(`city:${this.cfg.city}:bld${bi}`);
+        const img = this.getImg(`city:${this.cityId}:bld${bi}`);
         const st = k.street;
         const depthM = st.depth[0] + this.rand() * (st.depth[1] - st.depth[0]);
         const g = this.getGfx();
@@ -706,7 +822,7 @@ export class RunScene extends Phaser.Scene {
       while (this.propCursor[i] < this.dist + DRAW_DIST + 10) {
         const sides = pr.sides === "both" ? [-1, 1] : pr.sides === "left" ? [-1] : [1];
         const sgn = sides[Math.floor(this.rand() * sides.length)];
-        const img = this.getImg(`city:${this.cfg.city}:prop${i}`);
+        const img = this.getImg(`city:${this.cityId}:prop${i}`);
         this.scenery.push({ img, x: sgn * (ROAD_HALF + pr.offset + pr.tex.w / 2), z: this.propCursor[i], w: pr.tex.w, h: pr.tex.h, side: sgn });
         this.propCursor[i] += pr.spacing * (0.6 + this.rand() * 0.8);
       }
@@ -1187,6 +1303,20 @@ export class RunScene extends Phaser.Scene {
         .setDepth(this.depthFor(dz))
         .setAlpha(1 - smooth(DRAW_DIST - 20, DRAW_DIST, dz));
       if (!o.dead && o.img.tintTopLeft !== 0xffd0d0) o.img.setTint(mix(0xffffff, fogC, f * 0.8));
+    }
+
+    // ── city portal ──
+    if (this.portal) {
+      const dz = this.portal.z - camZ;
+      const p = this.proj(0, 0, this.portal.z);
+      if (!p || dz > DRAW_DIST + 30) this.portal.img.setVisible(false);
+      else
+        this.portal.img
+          .setVisible(true)
+          .setPosition(p.x, p.y)
+          .setDisplaySize(PORTAL_W * p.s, PORTAL_H * p.s)
+          .setDepth(this.depthFor(dz) - 5)
+          .setAlpha(1 - smooth(DRAW_DIST - 10, DRAW_DIST + 30, dz));
     }
 
     // ── coins / power-ups ──

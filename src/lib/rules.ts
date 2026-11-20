@@ -47,6 +47,8 @@ export interface RunResult {
   laneChanges: number;
   boostSeconds: number; // seconds spent with score boost active
   tutorial?: boolean;
+  /** City-to-city tour: meters run in each city, in order. `city` is the starting city. */
+  route?: { city: CityId; distance: number }[];
 }
 
 export type ValidationResult = { ok: true } | { ok: false; reason: string };
@@ -81,6 +83,16 @@ export function validateRun(r: RunResult, serverElapsedMs: number | null): Valid
   if (r.powerupsUsed > Math.ceil(r.distance / 150) + 2) return { ok: false, reason: "too many power-ups" };
   if (r.jumps + r.slides > secs * 6 + 10) return { ok: false, reason: "too many actions" };
   if (r.dodges > r.distance / 8 + 10) return { ok: false, reason: "too many dodges" };
+  if (r.route !== undefined) {
+    if (!Array.isArray(r.route) || r.route.length === 0 || r.route.length > 64) return { ok: false, reason: "invalid route" };
+    if (r.route[0].city !== r.city) return { ok: false, reason: "route must start in the run's city" };
+    let sum = 0;
+    for (const leg of r.route) {
+      if (!leg || !isCityId(leg.city) || !int(leg.distance)) return { ok: false, reason: "invalid route leg" };
+      sum += leg.distance;
+    }
+    if (sum > r.distance + 10) return { ok: false, reason: "route longer than run" };
+  }
   return { ok: true };
 }
 

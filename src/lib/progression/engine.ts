@@ -258,7 +258,7 @@ export function achievementProgress(s: PlayerState, a: AchievementDef): number {
     case "citiesUnlocked":
       return s.unlockedCities.length;
     case "citiesPlayed":
-      return Object.values(s.stats.cityStats).filter((c) => c && c.games > 0).length;
+      return Object.values(s.stats.cityStats).filter((c) => c && (c.games > 0 || c.distance > 0)).length;
     case "cityDistance":
       return Math.floor(s.stats.cityStats[m.city]?.distance ?? 0);
     case "cityBest":
@@ -331,12 +331,18 @@ export function applyRun(state: PlayerState, r: RunResult, ctx: Ctx, serverElaps
   st.slides += r.slides;
   st.dodges += r.dodges;
   st.longestRunMs = Math.max(st.longestRunMs, r.durationMs);
+  // Starting city gets the game, coins and best score; distance is credited to every city on the route.
   const cs = st.cityStats[r.city] ?? { games: 0, distance: 0, coins: 0, best: 0 };
   cs.games += 1;
-  cs.distance += distance;
   cs.coins += r.coins;
   cs.best = Math.max(cs.best, score);
   st.cityStats[r.city] = cs;
+  const route = r.route?.length ? r.route : [{ city: r.city, distance }];
+  for (const leg of route) {
+    const c = st.cityStats[leg.city] ?? { games: 0, distance: 0, coins: 0, best: 0 };
+    c.distance += Math.floor(leg.distance);
+    st.cityStats[leg.city] = c;
+  }
 
   grantCoins(s, r.coins, "run", ctx, r.sessionId);
   const xp = runXp(r);

@@ -135,3 +135,20 @@ describe("runner names", () => {
     expect(isLegacyGeneratedName("NeonKing")).toBe(false); // custom names are kept
   });
 });
+
+describe("world-tour runs", () => {
+  it("credits distance to every city on the route", () => {
+    const s0 = newPlayerState("u", "Tester", NOW);
+    const r = run({ distance: 2000, durationMs: 100000, route: [{ city: "tokyo", distance: 800 }, { city: "newyork", distance: 800 }, { city: "dubai", distance: 400 }] });
+    const { state } = applyRun(s0, r, newCtx(NOW), null);
+    expect(state.stats.cityStats.tokyo?.distance).toBe(800);
+    expect(state.stats.cityStats.newyork?.distance).toBe(800);
+    expect(state.stats.cityStats.dubai?.distance).toBe(400);
+    expect(state.stats.cityStats.tokyo?.games).toBe(1);
+  });
+  it("rejects routes that don't add up", () => {
+    expect(validateRun(run({ distance: 1000, durationMs: 60000, route: [{ city: "tokyo", distance: 5000 }] }), null).ok).toBe(false);
+    expect(validateRun(run({ distance: 1000, durationMs: 60000, route: [{ city: "paris", distance: 500 }] }), null).ok).toBe(false);
+    expect(validateRun(run({ distance: 1000, durationMs: 60000, route: [{ city: "tokyo", distance: 600 }, { city: "newyork", distance: 400 }] }), null).ok).toBe(true);
+  });
+});

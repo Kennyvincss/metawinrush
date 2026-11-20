@@ -14,7 +14,11 @@ export interface GameController {
   destroy(): void;
 }
 
-const SWIPE_MIN = 26; // CSS px before a drag counts as a swipe
+// Swipe tuning (CSS px). Up/down keep the original light threshold; left/right need a longer,
+// clearly horizontal drag so lane changes don't fire by accident, and each touch moves one lane at most.
+const SWIPE_V = 26; // jump / slide
+const SWIPE_H = 48; // lane change
+const SWIPE_H_RATIO = 1.3; // horizontal drag must clearly dominate the vertical drift
 const SWIPE_MAX_MS = 700;
 
 export function createGame(parent: HTMLElement): GameController {
@@ -63,7 +67,8 @@ export function createGame(parent: HTMLElement): GameController {
     sy = 0,
     st = 0,
     tracking = false,
-    pointerId = -1;
+    pointerId = -1,
+    laneDone = false; // one lane change per touch
   const onDown = (e: PointerEvent) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
     tracking = true;
@@ -71,6 +76,7 @@ export function createGame(parent: HTMLElement): GameController {
     sx = e.clientX;
     sy = e.clientY;
     st = performance.now();
+    laneDone = false;
     audio.unlock();
   };
   const onMove = (e: PointerEvent) => {
@@ -78,7 +84,9 @@ export function createGame(parent: HTMLElement): GameController {
     e.preventDefault();
     const dx = e.clientX - sx,
       dy = e.clientY - sy;
-    if (Math.hypot(dx, dy) < SWIPE_MIN) return;
+    const adx = Math.abs(dx),
+      ady = Math.abs(dy);
+    if (Math.max(adx, ady) < SWIPE_V) return;
     if (performance.now() - st > SWIPE_MAX_MS) {
       // slow drag: re-anchor so a later flick still registers
       sx = e.clientX;
@@ -86,8 +94,13 @@ export function createGame(parent: HTMLElement): GameController {
       st = performance.now();
       return;
     }
-    if (Math.abs(dx) > Math.abs(dy)) act(dx < 0 ? "left" : "right");
-    else act(dy < 0 ? "jump" : "slide");
+    if (ady >= adx) act(dy < 0 ? "jump" : "slide");
+    else {
+      // horizontal: needs a longer, clearly sideways drag, and only one lane change per touch
+      if (laneDone || adx < SWIPE_H || adx < ady * SWIPE_H_RATIO) return;
+      act(dx < 0 ? "left" : "right");
+      laneDone = true;
+    }
     // allow chained swipes in one touch: re-anchor at the current point
     sx = e.clientX;
     sy = e.clientY;
